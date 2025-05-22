@@ -1,6 +1,7 @@
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
+from flask_migrate import Migrate
 from dotenv import load_dotenv
 import os
 
@@ -9,6 +10,7 @@ load_dotenv()
 
 # 初始化扩展
 db = SQLAlchemy()
+migrate = Migrate()
 
 def create_app():
     app = Flask(__name__)
@@ -32,6 +34,7 @@ def create_app():
     
     # 初始化扩展
     db.init_app(app)
+    migrate.init_app(app, db)
     
     # 注册蓝图
     from .routes import auth_bp

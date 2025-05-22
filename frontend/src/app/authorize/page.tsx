@@ -1,27 +1,144 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAuth } from '@/lib/context/auth-context';
+import { Alert, AlertDescription } from "@/components/ui/alert";
+
+interface Authorization {
+  id: number;
+  data_type: string;
+  authorized_address: string;
+  status: string;
+  created_at: string;
+  revoked_at?: string;
+}
+
+interface TimelineLog {
+  id: number;
+  action: string;
+  timestamp: string;
+}
 
 export default function AuthorizePage() {
+  const { token } = useAuth();
   const [dataType, setDataType] = useState('');
   const [authorizedAddress, setAuthorizedAddress] = useState('');
+  const [authorizations, setAuthorizations] = useState<Authorization[]>([]);
+  const [timeline, setTimeline] = useState<TimelineLog[]>([]);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleAddAuthorization = () => {
-    // TODO: 实现添加授权逻辑
-    console.log('Add authorization:', { dataType, authorizedAddress });
+  // 获取授权列表
+  const fetchAuthorizations = async () => {
+    try {
+      const response = await fetch('http://localhost:5050/api/authorizations', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await response.json();
+      if (data.authorizations) {
+        setAuthorizations(data.authorizations);
+      }
+    } catch (err) {
+      setError('获取授权列表失败');
+    }
   };
+
+  // 获取授权时间线
+  const fetchTimeline = async (authorizationId: number) => {
+    try {
+      const response = await fetch(`http://localhost:5050/api/authorizations/${authorizationId}/timeline`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await response.json();
+      if (data.logs) {
+        setTimeline(data.logs);
+      }
+    } catch (err) {
+      setError('获取时间线失败');
+    }
+  };
+
+  // 创建授权
+  const handleAddAuthorization = async () => {
+    if (!dataType || !authorizedAddress) {
+      setError('请填写完整信息');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch('http://localhost:5050/api/authorizations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          data_type: dataType,
+          authorized_address: authorizedAddress
+        })
+      });
+
+      const data = await response.json();
+      if (data.authorization) {
+        await fetchAuthorizations();
+        setDataType('');
+        setAuthorizedAddress('');
+        setError('');
+      }
+    } catch (err) {
+      setError('创建授权失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 撤销授权
+  const handleRevokeAuthorization = async (id: number) => {
+    try {
+      const response = await fetch(`http://localhost:5050/api/authorizations/${id}/revoke`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+      if (data.authorization) {
+        await fetchAuthorizations();
+        await fetchTimeline(id);
+      }
+    } catch (err) {
+      setError('撤销授权失败');
+    }
+  };
+
+  useEffect(() => {
+    if (token) {
+      fetchAuthorizations();
+    }
+  }, [token]);
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">数据授权管理</h1>
-        <Button>新增授权</Button>
       </div>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
       <Card>
         <CardHeader>
@@ -53,7 +170,9 @@ export default function AuthorizePage() {
                 />
               </div>
             </div>
-            <Button onClick={handleAddAuthorization}>确认授权</Button>
+            <Button onClick={handleAddAuthorization} disabled={loading}>
+              {loading ? '处理中...' : '确认授权'}
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -75,44 +194,57 @@ export default function AuthorizePage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableRow>
-                <TableCell>0x1234...5678</TableCell>
-                <TableCell>身份信息</TableCell>
-                <TableCell>2024-03-20 10:00:00</TableCell>
-                <TableCell>有效</TableCell>
-                <TableCell>
-                  <Button variant="outline" size="sm">撤销</Button>
-                </TableCell>
-              </TableRow>
+              {authorizations.map((auth) => (
+                <TableRow key={auth.id}>
+                  <TableCell>{auth.authorized_address}</TableCell>
+                  <TableCell>{auth.data_type}</TableCell>
+                  <TableCell>{new Date(auth.created_at).toLocaleString()}</TableCell>
+                  <TableCell>{auth.status}</TableCell>
+                  <TableCell>
+                    {auth.status === 'active' && (
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handleRevokeAuthorization(auth.id)}
+                      >
+                        撤销
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>授权时间线</CardTitle>
-          <CardDescription>授权操作历史记录</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="flex items-center space-x-4">
-              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-              <div>
-                <p className="font-medium">新增授权</p>
-                <p className="text-sm text-gray-500">2024-03-20 10:00:00</p>
-              </div>
+      {timeline.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>授权时间线</CardTitle>
+            <CardDescription>授权操作历史记录</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {timeline.map((log) => (
+                <div key={log.id} className="flex items-center space-x-4">
+                  <div className={`w-2 h-2 rounded-full ${
+                    log.action === 'created' ? 'bg-blue-500' : 'bg-green-500'
+                  }`}></div>
+                  <div>
+                    <p className="font-medium">
+                      {log.action === 'created' ? '新增授权' : '撤销授权'}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      {new Date(log.timestamp).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              ))}
             </div>
-            <div className="flex items-center space-x-4">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <div>
-                <p className="font-medium">授权生效</p>
-                <p className="text-sm text-gray-500">2024-03-20 10:01:00</p>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 } 
