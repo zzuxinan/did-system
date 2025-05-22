@@ -1,36 +1,92 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# DID System - 去中心化身份认证系统
 
-## Getting Started
+这是一个基于区块链的去中心化身份认证系统，使用 Flask 和 Next.js 构建。
 
-First, run the development server:
+## 项目结构
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```
+did-system/
+├── backend/         # Flask 后端
+├── frontend/        # Next.js 前端
+└── docs/           # 项目文档
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 技术栈
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 后端
+- Python 3.8+
+- Flask
+- SQLAlchemy
+- Flask-CORS
+- JWT
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 前端
+- Next.js 14
+- TypeScript
+- Tailwind CSS
+- Axios
 
-## Learn More
+## 开发环境设置
 
-To learn more about Next.js, take a look at the following resources:
+### 后端设置
+1. 进入后端目录：
+   ```bash
+   cd backend
+   ```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+2. 创建虚拟环境：
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate  # Linux/Mac
+   # 或
+   .\venv\Scripts\activate  # Windows
+   ```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+3. 安装依赖：
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-## Deploy on Vercel
+4. 运行开发服务器：
+   ```bash
+   python run.py
+   ```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 前端设置
+1. 进入前端目录：
+   ```bash
+   cd frontend
+   ```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+2. 安装依赖：
+   ```bash
+   npm install
+   ```
+
+3. 运行开发服务器：
+   ```bash
+   npm run dev
+   ```
+
+## API 文档
+
+API 文档位于 `docs/api.md`。
+
+## 环境变量
+
+### 后端
+创建 `.env` 文件：
+```
+DATABASE_URL=sqlite:///did_system.db
+SECRET_KEY=your-secret-key
+```
+
+### 前端
+创建 `.env.local` 文件：
+```
+NEXT_PUBLIC_API_URL=http://localhost:5050
+```
+
+## 许可证
+
+MIT 

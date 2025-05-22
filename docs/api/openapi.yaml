@@ -1,0 +1,657 @@
+openapi: 3.0.0
+info:
+  title: DID System API
+  description: 去中心化身份认证系统API文档
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@example.com
+
+servers:
+  - url: http://localhost:5000/api/v1
+    description: 开发环境
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+
+    DID:
+      type: object
+      properties:
+        did:
+          type: string
+        type:
+          type: string
+          enum: [individual, organization]
+        publicKey:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    Credential:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        issuer:
+          type: string
+        holder:
+          type: string
+        claims:
+          type: object
+        issuedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+
+paths:
+  /auth/register:
+    post:
+      summary: 用户注册
+      tags:
+        - 认证
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+                - name
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+                name:
+                  type: string
+                phone:
+                  type: string
+      responses:
+        '200':
+          description: 注册成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: 注册成功
+                  data:
+                    type: object
+                    properties:
+                      userId:
+                        type: string
+                      token:
+                        type: string
+                      expiresIn:
+                        type: integer
+
+  /auth/login:
+    post:
+      summary: 用户登录
+      tags:
+        - 认证
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: 登录成功
+                  data:
+                    type: object
+                    properties:
+                      token:
+                        type: string
+                      expiresIn:
+                        type: integer
+                      user:
+                        $ref: '#/components/schemas/User'
+
+  /did/create:
+    post:
+      summary: 创建DID
+      tags:
+        - DID管理
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - type
+                - metadata
+              properties:
+                type:
+                  type: string
+                  enum: [individual, organization]
+                metadata:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    description:
+                      type: string
+      responses:
+        '200':
+          description: DID创建成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: DID创建成功
+                  data:
+                    $ref: '#/components/schemas/DID'
+
+  /did/verify:
+    post:
+      summary: 验证DID
+      tags:
+        - DID管理
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - did
+                - signature
+                - message
+              properties:
+                did:
+                  type: string
+                signature:
+                  type: string
+                message:
+                  type: string
+      responses:
+        '200':
+          description: 验证成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: 验证成功
+                  data:
+                    type: object
+                    properties:
+                      isValid:
+                        type: boolean
+                      verificationTime:
+                        type: string
+                        format: date-time
+
+  /credentials/create:
+    post:
+      summary: 创建凭证
+      tags:
+        - 凭证管理
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - type
+                - issuerDid
+                - holderDid
+                - claims
+                - expirationDate
+              properties:
+                type:
+                  type: string
+                issuerDid:
+                  type: string
+                holderDid:
+                  type: string
+                claims:
+                  type: object
+                expirationDate:
+                  type: string
+                  format: date-time
+      responses:
+        '200':
+          description: 凭证创建成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: 凭证创建成功
+                  data:
+                    type: object
+                    properties:
+                      credentialId:
+                        type: string
+                      credential:
+                        $ref: '#/components/schemas/Credential'
+
+  /credentials/verify:
+    post:
+      summary: 验证凭证
+      tags:
+        - 凭证管理
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - credentialId
+                - proof
+              properties:
+                credentialId:
+                  type: string
+                proof:
+                  type: object
+                  properties:
+                    type:
+                      type: string
+                    signature:
+                      type: string
+      responses:
+        '200':
+          description: 验证成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: 验证成功
+                  data:
+                    type: object
+                    properties:
+                      isValid:
+                        type: boolean
+                      verificationTime:
+                        type: string
+                        format: date-time
+                      credential:
+                        $ref: '#/components/schemas/Credential'
+
+  /authorizations/create:
+    post:
+      summary: 创建授权
+      tags:
+        - 授权管理
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - grantorDid
+                - granteeDid
+                - scope
+                - resources
+                - expiresAt
+              properties:
+                grantorDid:
+                  type: string
+                granteeDid:
+                  type: string
+                scope:
+                  type: array
+                  items:
+                    type: string
+                resources:
+                  type: array
+                  items:
+                    type: string
+                expiresAt:
+                  type: string
+                  format: date-time
+      responses:
+        '200':
+          description: 授权创建成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: 授权创建成功
+                  data:
+                    type: object
+                    properties:
+                      authorizationId:
+                        type: string
+                      createdAt:
+                        type: string
+                        format: date-time
+                      expiresAt:
+                        type: string
+                        format: date-time
+
+  /authorizations/verify:
+    post:
+      summary: 验证授权
+      tags:
+        - 授权管理
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - authorizationId
+                - resource
+                - action
+              properties:
+                authorizationId:
+                  type: string
+                resource:
+                  type: string
+                action:
+                  type: string
+      responses:
+        '200':
+          description: 验证成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: 验证成功
+                  data:
+                    type: object
+                    properties:
+                      isAuthorized:
+                        type: boolean
+                      scope:
+                        type: array
+                        items:
+                          type: string
+                      expiresAt:
+                        type: string
+                        format: date-time
+
+  /data-sharing/request:
+    post:
+      summary: 请求数据共享
+      tags:
+        - 数据共享
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - requesterDid
+                - ownerDid
+                - dataType
+                - purpose
+                - duration
+              properties:
+                requesterDid:
+                  type: string
+                ownerDid:
+                  type: string
+                dataType:
+                  type: string
+                purpose:
+                  type: string
+                duration:
+                  type: integer
+      responses:
+        '200':
+          description: 请求已发送
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: 请求已发送
+                  data:
+                    type: object
+                    properties:
+                      requestId:
+                        type: string
+                      status:
+                        type: string
+                        enum: [pending, approved, rejected]
+                      createdAt:
+                        type: string
+                        format: date-time
+
+  /data-sharing/{requestId}:
+    get:
+      summary: 获取共享数据
+      tags:
+        - 数据共享
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: 获取成功
+                  data:
+                    type: object
+                    properties:
+                      requestId:
+                        type: string
+                      status:
+                        type: string
+                      data:
+                        type: object
+                      sharedAt:
+                        type: string
+                        format: date-time
+                      expiresAt:
+                        type: string
+                        format: date-time
+
+  /audit-logs:
+    get:
+      summary: 获取操作日志
+      tags:
+        - 审计日志
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: startTime
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: endTime
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: type
+          in: query
+          schema:
+            type: string
+        - name: did
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: 获取成功
+                  data:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      page:
+                        type: integer
+                      pageSize:
+                        type: integer
+                      logs:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            type:
+                              type: string
+                            did:
+                              type: string
+                            action:
+                              type: string
+                            timestamp:
+                              type: string
+                              format: date-time
+                            details:
+                              type: object 

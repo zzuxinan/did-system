@@ -1,3 +1,20 @@
+// TypeScript 配置文件
+// 
+// 主要功能：
+// 1. 配置 TypeScript 编译器选项
+// 2. 定义项目的模块解析规则
+// 3. 设置类型检查的严格程度
+// 
+// 重要配置说明：
+// - target: 编译目标版本
+// - lib: 包含的类型定义库
+// - module: 模块系统
+// - jsx: React JSX 支持
+// - strict: 严格模式
+// - paths: 模块路径别名
+// - include: 包含的源文件
+// - exclude: 排除的文件
+
 {
   "compilerOptions": {
     "target": "ES2017",
