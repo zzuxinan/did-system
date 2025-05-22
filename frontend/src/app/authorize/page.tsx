@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from '@/lib/context/auth-context';
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import Link from "next/link";
 
 interface Authorization {
   id: number;
@@ -15,7 +16,8 @@ interface Authorization {
   authorized_address: string;
   status: string;
   created_at: string;
-  revoked_at?: string;
+  revoked_at: string | null;
+  expires_at: string | null;
 }
 
 interface TimelineLog {
@@ -24,13 +26,26 @@ interface TimelineLog {
   timestamp: string;
 }
 
+const DURATION_OPTIONS = [
+  { value: 5, label: '5分钟' },
+  { value: 10, label: '10分钟' },
+  { value: 30, label: '30分钟' },
+  { value: 60, label: '1小时' },
+  { value: 180, label: '3小时' },
+  { value: 360, label: '6小时' },
+  { value: 720, label: '12小时' },
+  { value: 1440, label: '24小时' }
+];
+
 export default function AuthorizePage() {
   const { token } = useAuth();
-  const [dataType, setDataType] = useState('');
+  const [dataType, setDataType] = useState('identity');
   const [authorizedAddress, setAuthorizedAddress] = useState('');
+  const [durationMinutes, setDurationMinutes] = useState(60);
   const [authorizations, setAuthorizations] = useState<Authorization[]>([]);
   const [timeline, setTimeline] = useState<TimelineLog[]>([]);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
   // 获取授权列表
@@ -69,11 +84,6 @@ export default function AuthorizePage() {
 
   // 创建授权
   const handleAddAuthorization = async () => {
-    if (!dataType || !authorizedAddress) {
-      setError('请填写完整信息');
-      return;
-    }
-
     setLoading(true);
     try {
       const response = await fetch('http://localhost:5050/api/authorizations', {
@@ -84,16 +94,19 @@ export default function AuthorizePage() {
         },
         body: JSON.stringify({
           data_type: dataType,
-          authorized_address: authorizedAddress
+          authorized_address: authorizedAddress,
+          duration_minutes: durationMinutes
         })
       });
 
       const data = await response.json();
-      if (data.authorization) {
-        await fetchAuthorizations();
-        setDataType('');
+      if (data.message) {
+        setSuccess('授权创建成功');
         setAuthorizedAddress('');
-        setError('');
+        fetchAuthorizations();
+        setTimeout(() => setSuccess(''), 3000);
+      } else {
+        setError(data.error || '创建授权失败');
       }
     } catch (err) {
       setError('创建授权失败');
@@ -103,9 +116,9 @@ export default function AuthorizePage() {
   };
 
   // 撤销授权
-  const handleRevokeAuthorization = async (id: number) => {
+  const handleRevokeAuthorization = async (authId: number) => {
     try {
-      const response = await fetch(`http://localhost:5050/api/authorizations/${id}/revoke`, {
+      const response = await fetch(`http://localhost:5050/api/authorizations/${authId}/revoke`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -113,9 +126,12 @@ export default function AuthorizePage() {
       });
 
       const data = await response.json();
-      if (data.authorization) {
-        await fetchAuthorizations();
-        await fetchTimeline(id);
+      if (data.message) {
+        setSuccess('授权撤销成功');
+        fetchAuthorizations();
+        setTimeout(() => setSuccess(''), 3000);
+      } else {
+        setError(data.error || '撤销授权失败');
       }
     } catch (err) {
       setError('撤销授权失败');
@@ -130,8 +146,16 @@ export default function AuthorizePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">数据授权管理</h1>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-3xl font-bold">数据授权管理</h1>
+          <p className="text-muted-foreground">管理您的数据授权和访问权限</p>
+        </div>
+        <div className="flex gap-4">
+          <Button asChild variant="outline">
+            <Link href="/authorized-data">查看授权数据</Link>
+          </Button>
+        </div>
       </div>
 
       {error && (
@@ -140,10 +164,16 @@ export default function AuthorizePage() {
         </Alert>
       )}
 
+      {success && (
+        <Alert>
+          <AlertDescription>{success}</AlertDescription>
+        </Alert>
+      )}
+
       <Card>
         <CardHeader>
-          <CardTitle>新增授权</CardTitle>
-          <CardDescription>选择数据类型和授权对象</CardDescription>
+          <CardTitle>创建新授权</CardTitle>
+          <CardDescription>授权其他地址访问您的数据</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
@@ -162,16 +192,31 @@ export default function AuthorizePage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <label>授权对象地址</label>
+                <label>授权地址</label>
                 <Input
-                  placeholder="输入授权对象的区块链地址"
                   value={authorizedAddress}
                   onChange={(e) => setAuthorizedAddress(e.target.value)}
+                  placeholder="输入授权对象的钱包地址"
                 />
+              </div>
+              <div className="space-y-2">
+                <label>授权时长</label>
+                <Select value={durationMinutes.toString()} onValueChange={(value) => setDurationMinutes(parseInt(value))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择授权时长" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DURATION_OPTIONS.map(option => (
+                      <SelectItem key={option.value} value={option.value.toString()}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <Button onClick={handleAddAuthorization} disabled={loading}>
-              {loading ? '处理中...' : '确认授权'}
+              {loading ? '创建中...' : '创建授权'}
             </Button>
           </div>
         </CardContent>
@@ -179,42 +224,42 @@ export default function AuthorizePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>授权记录</CardTitle>
-          <CardDescription>查看您的数据授权历史</CardDescription>
+          <CardTitle>授权列表</CardTitle>
+          <CardDescription>查看和管理您的数据授权</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>授权对象</TableHead>
-                <TableHead>数据类型</TableHead>
-                <TableHead>授权时间</TableHead>
-                <TableHead>状态</TableHead>
-                <TableHead>操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {authorizations.map((auth) => (
-                <TableRow key={auth.id}>
-                  <TableCell>{auth.authorized_address}</TableCell>
-                  <TableCell>{auth.data_type}</TableCell>
-                  <TableCell>{new Date(auth.created_at).toLocaleString()}</TableCell>
-                  <TableCell>{auth.status}</TableCell>
-                  <TableCell>
-                    {auth.status === 'active' && (
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => handleRevokeAuthorization(auth.id)}
-                      >
-                        撤销
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <div className="space-y-4">
+            {authorizations.map((auth) => (
+              <div key={auth.id} className="flex items-center justify-between p-4 border rounded-lg">
+                <div>
+                  <div className="font-medium">
+                    {auth.data_type === 'identity' ? '身份信息' :
+                     auth.data_type === 'profile' ? '个人资料' : '证书信息'}
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    授权地址: {auth.authorized_address}
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    创建时间: {new Date(auth.created_at).toLocaleString()}
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    过期时间: {auth.expires_at ? new Date(auth.expires_at).toLocaleString() : '永久'}
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    状态: {auth.status === 'active' ? '有效' : '已撤销'}
+                  </div>
+                </div>
+                {auth.status === 'active' && (
+                  <Button
+                    variant="destructive"
+                    onClick={() => handleRevokeAuthorization(auth.id)}
+                  >
+                    撤销授权
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
         </CardContent>
       </Card>
 

@@ -22,6 +22,7 @@ export function Navbar() {
 
   const navItems = [
     { name: '首页', href: '/' },
+    { name: '个人中心', href: '/dashboard' },
     { name: '数据授权', href: '/authorize', requiresAuth: true },
     { name: '声明签名', href: '/declaration', requiresAuth: true },
     { name: '验证入口', href: '/verify', requiresAuth: true },

@@ -125,7 +125,13 @@ export default function DeclarationPage() {
                   复制签名
                 </Button>
                 <Button variant="outline" onClick={() => {
-                  window.open(declaration.qr_code_path);
+                  // 创建一个临时链接来下载二维码
+                  const link = document.createElement('a');
+                  link.href = declaration.qr_code_path;
+                  link.download = `declaration_${declaration.signature}.png`;
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
                 }}>
                   下载二维码
                 </Button>
