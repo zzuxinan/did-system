@@ -4,7 +4,7 @@ import jwt
 from datetime import datetime, timedelta
 from functools import wraps
 from . import db
-from .models import User, UserLog, DataFile, DataAuthorization, Declaration, AuthorizationLog
+from .models import User, UserLog, DataFile, DataAuthorization, Declaration, AuthorizationLog, UserData
 import os
 import hashlib
 from werkzeug.utils import secure_filename
@@ -358,7 +358,7 @@ def create_authorization(current_user):
         data = request.get_json()
         
         # 验证必要字段
-        if not data or 'data_type' not in data or 'authorized_address' not in data:
+        if not data or 'data_type' not in data or 'authorized_address' not in data or 'duration_minutes' not in data:
             return jsonify({'error': '缺少必要字段'}), 400
             
         # 验证数据类型
@@ -369,11 +369,20 @@ def create_authorization(current_user):
         if not data['authorized_address'].startswith('0x') or len(data['authorized_address']) != 42:
             return jsonify({'error': '钱包地址格式不正确'}), 400
             
+        # 验证授权时长
+        valid_durations = [5, 10, 30, 60, 180, 360, 720, 1440]
+        if data['duration_minutes'] not in valid_durations:
+            return jsonify({'error': '无效的授权时长'}), 400
+            
+        # 计算过期时间
+        expires_at = datetime.utcnow() + timedelta(minutes=data['duration_minutes'])
+            
         # 创建授权记录
         authorization = DataAuthorization(
             user_id=current_user.id,
             data_type=data['data_type'],
-            authorized_address=data['authorized_address']
+            authorized_address=data['authorized_address'],
+            expires_at=expires_at
         )
         db.session.add(authorization)
         db.session.commit()
@@ -388,7 +397,7 @@ def create_authorization(current_user):
         
         # 记录用户操作
         log_user_action(current_user.id, 'create_authorization', 'success', 
-                       f'创建数据授权: {data["data_type"]} -> {data["authorized_address"]}')
+                       f'创建数据授权: {data["data_type"]} -> {data["authorized_address"]}, 有效期{data["duration_minutes"]}分钟')
         
         return jsonify({
             'message': '创建授权成功',
@@ -492,22 +501,21 @@ def create_declaration(current_user):
         
         # 生成二维码
         qr = qrcode.QRCode(version=1, box_size=10, border=5)
-        qr.add_data(f'https://example.com/verify?signature={signature}')
+        qr.add_data(f'http://localhost:3000/verify?signature={signature}')  # 修改为实际的前端URL
         qr.make(fit=True)
         qr_img = qr.make_image(fill_color="black", back_color="white")
         
-        # 保存二维码图片
-        qr_dir = os.path.join(data_dir, 'qr_codes')
-        os.makedirs(qr_dir, exist_ok=True)
-        qr_path = os.path.join(qr_dir, f'{signature}.png')
-        qr_img.save(qr_path)
+        # 将二维码转换为base64
+        buffered = io.BytesIO()
+        qr_img.save(buffered, format="PNG")
+        qr_base64 = base64.b64encode(buffered.getvalue()).decode()
         
         # 创建声明记录
         declaration = Declaration(
             user_id=current_user.id,
             content=data['content'],
             signature=signature,
-            qr_code_path=qr_path
+            qr_code_path=f'data:image/png;base64,{qr_base64}'  # 直接存储base64数据
         )
         db.session.add(declaration)
         db.session.commit()
@@ -515,15 +523,9 @@ def create_declaration(current_user):
         # 记录用户操作
         log_user_action(current_user.id, 'create_declaration', 'success', '创建声明成功')
         
-        # 生成二维码的base64
-        buffered = io.BytesIO()
-        qr_img.save(buffered, format="PNG")
-        qr_base64 = base64.b64encode(buffered.getvalue()).decode()
-        
         return jsonify({
             'message': '创建声明成功',
-            'declaration': declaration.to_dict(),
-            'qr_code': f'data:image/png;base64,{qr_base64}'
+            'declaration': declaration.to_dict()
         }), 201
         
     except Exception as e:
@@ -578,6 +580,123 @@ def get_declaration_qr(signature):
         
     except Exception as e:
         return jsonify({'error': f'获取二维码失败: {str(e)}'}), 500
+
+@auth_bp.route('/api/user-data/<data_type>', methods=['GET'])
+@token_required
+def get_user_data(current_user, data_type):
+    try:
+        user_data = UserData.query.filter_by(
+            user_id=current_user.id,
+            data_type=data_type
+        ).first()
+        
+        if not user_data:
+            return jsonify({
+                'message': '数据不存在',
+                'data': None
+            }), 200
+            
+        return jsonify({
+            'message': '获取数据成功',
+            'data': user_data.to_dict()
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'获取数据失败: {str(e)}'}), 500
+
+@auth_bp.route('/api/user-data/<data_type>', methods=['PUT'])
+@token_required
+def update_user_data(current_user, data_type):
+    try:
+        data = request.get_json()
+        
+        if not data or 'data_content' not in data:
+            return jsonify({'error': '缺少必要字段'}), 400
+            
+        # 验证数据类型
+        if data_type not in ['identity', 'profile', 'credentials']:
+            return jsonify({'error': '无效的数据类型'}), 400
+            
+        # 查找或创建用户数据
+        user_data = UserData.query.filter_by(
+            user_id=current_user.id,
+            data_type=data_type
+        ).first()
+        
+        if user_data:
+            user_data.data_content = data['data_content']
+            user_data.updated_at = datetime.utcnow()
+        else:
+            user_data = UserData(
+                user_id=current_user.id,
+                data_type=data_type,
+                data_content=data['data_content']
+            )
+            db.session.add(user_data)
+            
+        db.session.commit()
+        
+        # 记录操作日志
+        log_user_action(current_user.id, 'update_user_data', 'success', 
+                       f'更新{data_type}数据成功')
+        
+        return jsonify({
+            'message': '更新数据成功',
+            'data': user_data.to_dict()
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'更新数据失败: {str(e)}'}), 500
+
+@auth_bp.route('/api/authorized-data/<data_type>', methods=['GET'])
+@token_required
+def get_authorized_data(current_user, data_type):
+    try:
+        # 验证授权
+        authorization = DataAuthorization.query.filter_by(
+            data_type=data_type,
+            authorized_address=current_user.wallet_address,
+            status='active'
+        ).first()
+        
+        if not authorization:
+            return jsonify({'error': '未授权访问'}), 403
+            
+        # 检查授权是否过期
+        if authorization.expires_at and authorization.expires_at < datetime.utcnow():
+            # 更新授权状态为已过期
+            authorization.status = 'revoked'
+            authorization.revoked_at = datetime.utcnow()
+            db.session.commit()
+            return jsonify({'error': '授权已过期'}), 403
+            
+        # 获取授权数据
+        user_data = UserData.query.filter_by(
+            user_id=authorization.user_id,
+            data_type=data_type
+        ).first()
+        
+        if not user_data:
+            return jsonify({
+                'message': '数据不存在',
+                'data': None
+            }), 200
+            
+        return jsonify({
+            'message': '获取授权数据成功',
+            'data': user_data.to_dict()
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'获取授权数据失败: {str(e)}'}), 500
+
+@auth_bp.route('/api/health', methods=['GET'])
+def health_check():
+    return jsonify({
+        'status': 'ok',
+        'timestamp': datetime.utcnow().isoformat()
+    }), 200
 
 @auth_bp.errorhandler(404)
 def not_found(error):

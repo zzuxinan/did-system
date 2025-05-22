@@ -74,6 +74,7 @@ class DataAuthorization(db.Model):
     status = db.Column(db.String(20), default='active')  # active, revoked
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     revoked_at = db.Column(db.DateTime)
+    expires_at = db.Column(db.DateTime)  # 授权过期时间
 
     user = db.relationship('User', backref=db.backref('authorizations', lazy=True))
 
@@ -85,7 +86,8 @@ class DataAuthorization(db.Model):
             'authorized_address': self.authorized_address,
             'status': self.status,
             'created_at': self.created_at.isoformat(),
-            'revoked_at': self.revoked_at.isoformat() if self.revoked_at else None
+            'revoked_at': self.revoked_at.isoformat() if self.revoked_at else None,
+            'expires_at': self.expires_at.isoformat() if self.expires_at else None
         }
 
 class Declaration(db.Model):
@@ -124,4 +126,24 @@ class AuthorizationLog(db.Model):
             'authorization_id': self.authorization_id,
             'action': self.action,
             'created_at': self.created_at.isoformat()
+        }
+
+class UserData(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    data_type = db.Column(db.String(50), nullable=False)  # identity, profile, credentials
+    data_content = db.Column(db.JSON, nullable=False)  # 存储具体数据
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = db.relationship('User', backref=db.backref('user_data', lazy=True))
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'data_type': self.data_type,
+            'data_content': self.data_content,
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat()
         } 
