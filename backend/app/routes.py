@@ -2,11 +2,31 @@ from flask import Blueprint, request, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 import jwt
 from datetime import datetime, timedelta
+from functools import wraps
 from . import db
 from .models import User
 import os
 
 auth_bp = Blueprint('auth', __name__)
+
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.headers.get('Authorization')
+        if not token:
+            return jsonify({'error': '缺少认证token'}), 401
+            
+        try:
+            token = token.split(' ')[1]  # Bearer token
+            data = jwt.decode(token, os.getenv('SECRET_KEY', 'your-secret-key'), algorithms=['HS256'])
+            current_user = User.query.get(data['user_id'])
+            if not current_user:
+                return jsonify({'error': '用户不存在'}), 401
+        except:
+            return jsonify({'error': '无效的token'}), 401
+            
+        return f(current_user, *args, **kwargs)
+    return decorated
 
 @auth_bp.route('/api/register', methods=['POST'])
 def register():
@@ -73,6 +93,43 @@ def register():
         return jsonify({
             'error': f'注册失败: {str(e)}'
         }), 500
+
+@auth_bp.route('/api/login', methods=['POST'])
+def login():
+    try:
+        data = request.get_json()
+        
+        # 验证必要字段
+        if not data or 'email' not in data or 'password' not in data:
+            return jsonify({'error': '缺少必要字段'}), 400
+            
+        # 查找用户
+        user = User.query.filter_by(email=data['email']).first()
+        if not user or not check_password_hash(user.password_hash, data['password']):
+            return jsonify({'error': '邮箱或密码错误'}), 401
+            
+        # 生成 JWT token
+        token = jwt.encode({
+            'user_id': user.id,
+            'exp': datetime.utcnow() + timedelta(days=1)
+        }, os.getenv('SECRET_KEY', 'your-secret-key'))
+        
+        return jsonify({
+            'message': '登录成功',
+            'user': user.to_dict(),
+            'token': token
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'登录失败: {str(e)}'}), 500
+
+@auth_bp.route('/api/profile', methods=['GET'])
+@token_required
+def get_profile(current_user):
+    return jsonify({
+        'message': '获取用户信息成功',
+        'user': current_user.to_dict()
+    }), 200
 
 @auth_bp.errorhandler(404)
 def not_found(error):
