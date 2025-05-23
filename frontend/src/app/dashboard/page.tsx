@@ -7,10 +7,44 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import Link from "next/link";
 import { useAuth } from '@/lib/context/auth-context';
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from 'react';
+
+function formatToBeijingTime(isoString: string) {
+  let fixed = isoString.endsWith('Z') ? isoString : isoString + 'Z';
+  const date = new Date(fixed);
+  return date.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+}
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const router = useRouter();
+  const [logs, setLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const fetchLogs = async () => {
+      if (!token) return;
+      setLoading(true);
+      setError('');
+      try {
+        const res = await fetch('http://localhost:5050/api/profile/logs', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.logs) {
+          setLogs(data.logs);
+        } else {
+          setError(data.error || '获取操作记录失败');
+        }
+      } catch (e) {
+        setError('获取操作记录失败');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchLogs();
+  }, [token]);
 
   return (
     <ProtectedRoute>
@@ -81,6 +115,7 @@ export default function DashboardPage() {
             <CardDescription>您的最近操作记录</CardDescription>
           </CardHeader>
           <CardContent>
+            {error && <div className="text-red-500 mb-2">{error}</div>}
             <Table>
               <TableHeader>
                 <TableRow>
@@ -90,11 +125,19 @@ export default function DashboardPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                <TableRow>
-                  <TableCell>2024-03-20 10:00</TableCell>
-                  <TableCell>登录系统</TableCell>
-                  <TableCell>成功</TableCell>
-                </TableRow>
+                {loading ? (
+                  <TableRow><TableCell colSpan={3}>加载中...</TableCell></TableRow>
+                ) : logs.length > 0 ? (
+                  logs.map((log) => (
+                    <TableRow key={log.id}>
+                      <TableCell>{formatToBeijingTime(log.created_at)}</TableCell>
+                      <TableCell>{log.action}</TableCell>
+                      <TableCell>{log.status === 'success' ? '成功' : '失败'}</TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow><TableCell colSpan={3}>暂无操作记录</TableCell></TableRow>
+                )}
               </TableBody>
             </Table>
           </CardContent>
