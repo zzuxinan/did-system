@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useAuth } from '@/lib/context/auth-context';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import Link from "next/link";
+import { ethers } from 'ethers';
 
 interface AuthorizedData {
   identity?: {
@@ -30,8 +31,32 @@ export default function AuthorizedDataPage() {
   const [authorizedData, setAuthorizedData] = useState<AuthorizedData>({});
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [walletAddress, setWalletAddress] = useState('');
 
+  // 连接钱包
+  const connectWallet = async () => {
+    try {
+      if (!window.ethereum) {
+        throw new Error('请安装 MetaMask');
+      }
+
+      const accounts = await window.ethereum.request({
+        method: 'eth_requestAccounts'
+      });
+
+      setWalletAddress(accounts[0]);
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  // 获取授权数据
   const fetchAuthorizedData = async (dataType: keyof AuthorizedData) => {
+    if (!walletAddress) {
+      setError('请先连接钱包');
+      return;
+    }
+
     setLoading(true);
     try {
       const response = await fetch(`http://localhost:5050/api/authorized-data/${dataType}`, {
@@ -41,7 +66,9 @@ export default function AuthorizedDataPage() {
       });
       
       const data = await response.json();
-      if (data.data?.data_content) {
+      if (data.error) {
+        setError(data.error);
+      } else if (data.data?.data_content) {
         setAuthorizedData(prev => ({
           ...prev,
           [dataType]: data.data.data_content
@@ -54,6 +81,39 @@ export default function AuthorizedDataPage() {
     }
   };
 
+  // 检查钱包连接状态
+  useEffect(() => {
+    const checkWalletConnection = async () => {
+      if (window.ethereum) {
+        try {
+          const accounts = await window.ethereum.request({
+            method: 'eth_accounts'
+          });
+          if (accounts.length > 0) {
+            setWalletAddress(accounts[0]);
+          }
+        } catch (err) {
+          console.error('检查钱包连接失败:', err);
+        }
+      }
+    };
+
+    checkWalletConnection();
+
+    // 监听钱包账户变化
+    if (window.ethereum) {
+      window.ethereum.on('accountsChanged', (accounts: string[]) => {
+        setWalletAddress(accounts[0] || '');
+      });
+    }
+
+    return () => {
+      if (window.ethereum) {
+        window.ethereum.removeListener('accountsChanged', () => {});
+      }
+    };
+  }, []);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -64,6 +124,9 @@ export default function AuthorizedDataPage() {
           </p>
         </div>
         <div className="flex gap-4">
+          <Button onClick={connectWallet} variant="outline">
+            {walletAddress ? '已连接钱包' : '连接钱包'}
+          </Button>
           <Button asChild variant="outline">
             <Link href="/authorize">
               管理数据授权
@@ -78,6 +141,13 @@ export default function AuthorizedDataPage() {
         </Alert>
       )}
 
+      {walletAddress && (
+        <div className="p-4 bg-gray-50 rounded-md">
+          <p className="text-sm text-gray-600">当前连接钱包：</p>
+          <p className="text-sm font-mono">{walletAddress}</p>
+        </div>
+      )}
+
       {/* 身份信息 */}
       <Card>
         <CardHeader>
@@ -88,7 +158,7 @@ export default function AuthorizedDataPage() {
           <div className="space-y-4">
             <Button 
               onClick={() => fetchAuthorizedData('identity')} 
-              disabled={loading}
+              disabled={loading || !walletAddress}
             >
               {loading ? '加载中...' : '查看身份信息'}
             </Button>
@@ -128,7 +198,7 @@ export default function AuthorizedDataPage() {
           <div className="space-y-4">
             <Button 
               onClick={() => fetchAuthorizedData('profile')} 
-              disabled={loading}
+              disabled={loading || !walletAddress}
             >
               {loading ? '加载中...' : '查看个人资料'}
             </Button>
@@ -164,7 +234,7 @@ export default function AuthorizedDataPage() {
           <div className="space-y-4">
             <Button 
               onClick={() => fetchAuthorizedData('credentials')} 
-              disabled={loading}
+              disabled={loading || !walletAddress}
             >
               {loading ? '加载中...' : '查看证书信息'}
             </Button>

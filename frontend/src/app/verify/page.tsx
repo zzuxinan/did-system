@@ -61,7 +61,7 @@ export default function VerifyPage() {
           <div className="space-y-4">
             <div className="space-y-2">
               <label>声明签名</label>
-              <Input
+                <Input
                 placeholder="输入声明签名"
                 value={signature}
                 onChange={(e) => setSignature(e.target.value)}
@@ -98,7 +98,7 @@ export default function VerifyPage() {
                       {verificationResult.details.did}
                     </div>
                   </div>
-                  <div className="space-y-2">
+                <div className="space-y-2">
                     <label>签名</label>
                     <div className="p-4 bg-gray-50 rounded-lg font-mono break-all">
                       {verificationResult.details.signature}
@@ -108,8 +108,8 @@ export default function VerifyPage() {
                     <label>时间戳</label>
                     <div className="p-4 bg-gray-50 rounded-lg">
                       {new Date(verificationResult.details.timestamp).toLocaleString()}
-                    </div>
                   </div>
+                </div>
                 </>
               )}
               <div className="flex justify-end">

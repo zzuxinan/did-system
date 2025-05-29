@@ -71,16 +71,16 @@ export default function DashboardPage() {
                 >
                   进入个人信息管理
                 </Button>
-                <dl className="space-y-2">
-                  <div>
-                    <dt className="text-sm font-medium text-muted-foreground">姓名</dt>
-                    <dd>{user?.name}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-medium text-muted-foreground">邮箱</dt>
-                    <dd>{user?.email}</dd>
-                  </div>
-                </dl>
+              <dl className="space-y-2">
+                <div>
+                  <dt className="text-sm font-medium text-muted-foreground">姓名</dt>
+                  <dd>{user?.name}</dd>
+                </div>
+                <div>
+                  <dt className="text-sm font-medium text-muted-foreground">邮箱</dt>
+                  <dd>{user?.email}</dd>
+                </div>
+              </dl>
               </div>
             </CardContent>
           </Card>
@@ -133,7 +133,7 @@ export default function DashboardPage() {
                       <TableCell>{formatToBeijingTime(log.created_at)}</TableCell>
                       <TableCell>{log.action}</TableCell>
                       <TableCell>{log.status === 'success' ? '成功' : '失败'}</TableCell>
-                    </TableRow>
+                </TableRow>
                   ))
                 ) : (
                   <TableRow><TableCell colSpan={3}>暂无操作记录</TableCell></TableRow>

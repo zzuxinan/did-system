@@ -264,31 +264,31 @@ export default function AuthorizePage() {
       </Card>
 
       {timeline.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>授权时间线</CardTitle>
-            <CardDescription>授权操作历史记录</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>授权时间线</CardTitle>
+          <CardDescription>授权操作历史记录</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
               {timeline.map((log) => (
                 <div key={log.id} className="flex items-center space-x-4">
                   <div className={`w-2 h-2 rounded-full ${
                     log.action === 'created' ? 'bg-blue-500' : 'bg-green-500'
                   }`}></div>
-                  <div>
+              <div>
                     <p className="font-medium">
                       {log.action === 'created' ? '新增授权' : '撤销授权'}
                     </p>
                     <p className="text-sm text-gray-500">
                       {new Date(log.timestamp).toLocaleString()}
                     </p>
-                  </div>
-                </div>
-              ))}
+              </div>
             </div>
-          </CardContent>
-        </Card>
+              ))}
+          </div>
+        </CardContent>
+      </Card>
       )}
     </div>
   );
