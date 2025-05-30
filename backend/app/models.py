@@ -131,8 +131,10 @@ class AuthorizationLog(db.Model):
 class UserData(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    data_type = db.Column(db.String(50), nullable=False)  # identity, profile, credentials
-    data_content = db.Column(db.JSON, nullable=False)  # 存储具体数据
+    data_type = db.Column(db.String(50), nullable=False)
+    data_content = db.Column(db.Text, nullable=False)
+    signature = db.Column(db.String(256), nullable=True)
+    filename = db.Column(db.String(256), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -144,6 +146,28 @@ class UserData(db.Model):
             'user_id': self.user_id,
             'data_type': self.data_type,
             'data_content': self.data_content,
+            'signature': self.signature,
+            'filename': self.filename,
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat()
+        }
+
+class OperationLog(db.Model):
+    __tablename__ = 'operation_logs'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    operation_type = db.Column(db.String(50), nullable=False)  # upload, decrypt 等
+    operation_details = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    user = db.relationship('User', backref=db.backref('operation_logs', lazy=True))
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'operation_type': self.operation_type,
+            'operation_details': self.operation_details,
+            'created_at': self.created_at.isoformat()
         } 

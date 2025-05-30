@@ -1,256 +1,198 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { ProtectedRoute } from '@/components/auth/protected-route';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { useAuth } from '@/lib/context/auth-context';
+import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import Link from 'next/link';
+import { useAuth } from '@/lib/context/auth-context';
+import { useRouter } from "next/navigation";
+import { useState } from 'react';
 import api from '@/lib/api/config';
 
-interface UserData {
-  identity: {
-    name: string;
-    idNumber: string;
-    phone: string;
-    address: string;
-  };
-  profile: {
-    education: string;
-    workExperience: string;
-    skills: string[];
-  };
-  credentials: {
-    certificates: string[];
-    licenses: string[];
-  };
-}
-
 export default function ProfilePage() {
-  const { token } = useAuth();
-  const [userData, setUserData] = useState<UserData>({
-    identity: {
-      name: '',
-      idNumber: '',
-      phone: '',
-      address: ''
-    },
-    profile: {
-      education: '',
-      workExperience: '',
-      skills: []
-    },
-    credentials: {
-      certificates: [],
-      licenses: []
-    }
-  });
+  const { user, token } = useAuth();
+  const router = useRouter();
+  const [encryptedData, setEncryptedData] = useState('');
+  const [decryptedData, setDecryptedData] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [decryptSignature, setDecryptSignature] = useState('');
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [loading, setLoading] = useState(false);
 
-  // 获取用户数据
-  const fetchUserData = async (dataType: keyof UserData) => {
-    try {
-      const response = await api.get(`/user-data/${dataType}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      setUserData(prev => ({ ...prev, [dataType]: response.data.data_content }));
-    } catch (err) {
-      setError('获取数据失败');
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setFile(e.target.files[0]);
     }
   };
 
-  // 更新用户数据
-  const updateUserData = async (dataType: keyof UserData) => {
+  const handleUpload = async () => {
+    if (!file || !token) return;
     setLoading(true);
+    setError('');
+    setSuccess('');
     try {
-      const response = await api.put(`/user-data/${dataType}`, {
-        data_content: userData[dataType]
-      }, {
-        headers: { 'Authorization': `Bearer ${token}` }
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await api.post('/user-data/upload', formData, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
       });
-      setUserData(prev => ({ ...prev, [dataType]: response.data.data_content }));
-      setSuccess('更新成功');
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (err) {
-      setError('更新失败');
+      setEncryptedData(response.data.encrypted_data);
+      setSuccess('文件上传并加密成功');
+    } catch (e) {
+      setError('文件上传失败');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    if (token) {
-      fetchUserData('identity');
-      fetchUserData('profile');
-      fetchUserData('credentials');
+  const handleDecrypt = async () => {
+    if (!decryptSignature || !token) return;
+    setLoading(true);
+    setError('');
+    setSuccess('');
+    try {
+      const response = await api.post('/user-data/decrypt', {
+        signature: decryptSignature
+      }, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      setDecryptedData(response.data.decrypted_data);
+      setSuccess('数据解密成功');
+    } catch (e) {
+      setError('数据解密失败');
+    } finally {
+      setLoading(false);
     }
-  }, [token]);
+  };
+
+  const handleDownload = async (data: string, filename: string) => {
+    const blob = new Blob([data], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">个人信息管理</h1>
-        <Link href="/authorize">
-          <Button variant="outline">管理数据授权</Button>
-        </Link>
+    <ProtectedRoute>
+      <div className="container mx-auto p-4">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">数据存储</h1>
+          <Link href="/dashboard">
+            <Button variant="outline">返回仪表盘</Button>
+          </Link>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* 加密上传部分 */}
+          <Card>
+            <CardHeader>
+              <CardTitle>加密上传</CardTitle>
+              <CardDescription>上传文件并获取加密数据</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="file">选择文件</Label>
+                  <Input
+                    id="file"
+                    type="file"
+                    onChange={handleFileChange}
+                    className="mt-1"
+                  />
+                </div>
+                <Button
+                  onClick={handleUpload}
+                  disabled={!file || loading}
+                  className="w-full"
+                >
+                  {loading ? '处理中...' : '上传并加密'}
+                </Button>
+                {encryptedData && (
+                  <div className="space-y-2">
+                    <Label>加密数据</Label>
+                    <div className="p-2 bg-gray-100 rounded-md break-all">
+                      {encryptedData}
+                    </div>
+                    <Button
+                      onClick={() => handleDownload(encryptedData, 'encrypted_data.txt')}
+                      variant="outline"
+                      className="w-full"
+                    >
+                      下载加密数据
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+          {/* 解密下载部分 */}
+          <Card>
+            <CardHeader>
+              <CardTitle>解密下载</CardTitle>
+              <CardDescription>输入加密数据并解密</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="signature">加密数据</Label>
+                  <Input
+                    id="signature"
+                    value={decryptSignature}
+                    onChange={(e) => setDecryptSignature(e.target.value)}
+                    placeholder="请输入加密数据"
+                    className="mt-1"
+                  />
+                </div>
+                <Button
+                  onClick={handleDecrypt}
+                  disabled={!decryptSignature || loading}
+                  className="w-full"
+                >
+                  {loading ? '处理中...' : '解密数据'}
+                </Button>
+                {decryptedData && (
+                  <div className="space-y-2">
+                    <Label>解密数据</Label>
+                    <div className="p-2 bg-gray-100 rounded-md break-all">
+                      {decryptedData}
+                    </div>
+                    <Button
+                      onClick={() => handleDownload(decryptedData, 'decrypted_data.txt')}
+                      variant="outline"
+                      className="w-full"
+                    >
+                      下载解密数据
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+        {error && (
+          <Alert variant="destructive" className="mt-4">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        {success && (
+          <Alert className="mt-4">
+            <AlertDescription>{success}</AlertDescription>
+          </Alert>
+        )}
       </div>
-
-      {error && (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
-      {success && (
-        <Alert>
-          <AlertDescription>{success}</AlertDescription>
-        </Alert>
-      )}
-
-      {/* 身份信息 */}
-      <Card>
-        <CardHeader>
-          <CardTitle>身份信息</CardTitle>
-          <CardDescription>管理您的个人身份信息</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="grid gap-4">
-              <div className="space-y-2">
-                <label>姓名</label>
-                <Input
-                  value={userData.identity.name}
-                  onChange={(e) => setUserData(prev => ({
-                    ...prev,
-                    identity: { ...prev.identity, name: e.target.value }
-                  }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <label>身份证号</label>
-                <Input
-                  value={userData.identity.idNumber}
-                  onChange={(e) => setUserData(prev => ({
-                    ...prev,
-                    identity: { ...prev.identity, idNumber: e.target.value }
-                  }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <label>手机号码</label>
-                <Input
-                  value={userData.identity.phone}
-                  onChange={(e) => setUserData(prev => ({
-                    ...prev,
-                    identity: { ...prev.identity, phone: e.target.value }
-                  }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <label>地址</label>
-                <Input
-                  value={userData.identity.address}
-                  onChange={(e) => setUserData(prev => ({
-                    ...prev,
-                    identity: { ...prev.identity, address: e.target.value }
-                  }))}
-                />
-              </div>
-            </div>
-            <Button onClick={() => updateUserData('identity')} disabled={loading}>
-              {loading ? '保存中...' : '保存身份信息'}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* 个人资料 */}
-      <Card>
-        <CardHeader>
-          <CardTitle>个人资料</CardTitle>
-          <CardDescription>管理您的个人资料信息</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="grid gap-4">
-              <div className="space-y-2">
-                <label>教育经历</label>
-                <Textarea
-                  value={userData.profile.education}
-                  onChange={(e) => setUserData(prev => ({
-                    ...prev,
-                    profile: { ...prev.profile, education: e.target.value }
-                  }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <label>工作经历</label>
-                <Textarea
-                  value={userData.profile.workExperience}
-                  onChange={(e) => setUserData(prev => ({
-                    ...prev,
-                    profile: { ...prev.profile, workExperience: e.target.value }
-                  }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <label>技能（用逗号分隔）</label>
-                <Input
-                  value={userData.profile.skills.join(', ')}
-                  onChange={(e) => setUserData(prev => ({
-                    ...prev,
-                    profile: { ...prev.profile, skills: e.target.value.split(',').map(s => s.trim()) }
-                  }))}
-                />
-              </div>
-            </div>
-            <Button onClick={() => updateUserData('profile')} disabled={loading}>
-              {loading ? '保存中...' : '保存个人资料'}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* 证书信息 */}
-      <Card>
-        <CardHeader>
-          <CardTitle>证书信息</CardTitle>
-          <CardDescription>管理您的证书和执照信息</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="grid gap-4">
-              <div className="space-y-2">
-                <label>证书（用逗号分隔）</label>
-                <Input
-                  value={userData.credentials.certificates.join(', ')}
-                  onChange={(e) => setUserData(prev => ({
-                    ...prev,
-                    credentials: { ...prev.credentials, certificates: e.target.value.split(',').map(s => s.trim()) }
-                  }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <label>执照（用逗号分隔）</label>
-                <Input
-                  value={userData.credentials.licenses.join(', ')}
-                  onChange={(e) => setUserData(prev => ({
-                    ...prev,
-                    credentials: { ...prev.credentials, licenses: e.target.value.split(',').map(s => s.trim()) }
-                  }))}
-                />
-              </div>
-            </div>
-            <Button onClick={() => updateUserData('credentials')} disabled={loading}>
-              {loading ? '保存中...' : '保存证书信息'}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+    </ProtectedRoute>
   );
 } 

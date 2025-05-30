@@ -1,16 +1,18 @@
-from flask import Blueprint, request, jsonify, send_file
+from flask import Blueprint, request, jsonify, send_file, current_app
 from werkzeug.security import generate_password_hash, check_password_hash
 import jwt
 from datetime import datetime, timedelta
 from functools import wraps
 from . import db
-from .models import User, UserLog, DataFile, DataAuthorization, Declaration, AuthorizationLog, UserData
+from .models import User, UserLog, DataFile, DataAuthorization, Declaration, AuthorizationLog, UserData, OperationLog
 import os
 import hashlib
 from werkzeug.utils import secure_filename
 import qrcode
 import io
 import base64
+from .utils import generate_signature, verify_signature, encrypt_data, decrypt_data
+import uuid
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/v1/auth')
 
@@ -702,4 +704,60 @@ def not_found(error):
 def internal_error(error):
     return jsonify({
         'error': '服务器内部错误'
-    }), 500 
+    }), 500
+
+@auth_bp.route('/user-data/upload', methods=['POST'])
+@token_required
+def upload_file(current_user):
+    if 'file' not in request.files:
+        return jsonify({'error': '没有文件'}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': '没有选择文件'}), 400
+
+    try:
+        file_content = file.read()
+        file_hash = hashlib.sha256(file_content).hexdigest()[:16]
+        file_b64 = base64.b64encode(file_content).decode('utf-8')
+        encrypted_data = encrypt_data(file_b64)
+        user_data = UserData(
+            user_id=current_user.id,
+            data_type='file',
+            data_content=encrypted_data,
+            signature=file_hash,
+            filename=file.filename  # 存储原始文件名
+        )
+        db.session.add(user_data)
+        db.session.commit()
+        return jsonify({
+            'message': '文件上传成功',
+            'hash': file_hash
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'文件上传失败: {str(e)}')
+        return jsonify({'error': f'文件上传失败: {str(e)}'}), 500
+
+@auth_bp.route('/user-data/decrypt', methods=['POST'])
+@token_required
+def decrypt_user_data(current_user):
+    data = request.get_json()
+    if not data or 'hash' not in data:
+        return jsonify({'error': '缺少加密串'}), 400
+
+    file_hash = data['hash']
+    user_data = UserData.query.filter_by(signature=file_hash).first()
+    if not user_data:
+        return jsonify({'error': '未找到加密数据'}), 404
+
+    try:
+        decrypted_b64 = decrypt_data(user_data.data_content)
+        file_content = base64.b64decode(decrypted_b64)
+        return jsonify({
+            'message': '数据解密成功',
+            'file_content': base64.b64encode(file_content).decode('utf-8'),
+            'filename': user_data.filename or 'decrypted_file'
+        }), 200
+    except Exception as e:
+        return jsonify({'error': f'数据解密失败: {str(e)}'}), 500 
