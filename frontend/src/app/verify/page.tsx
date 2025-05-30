@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import api from '@/lib/api/config';
 
 interface VerificationResult {
   isValid: boolean;
@@ -31,9 +32,8 @@ export default function VerifyPage() {
 
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:5050/api/declarations/${signature}/verify`);
-      const data = await response.json();
-      setVerificationResult(data);
+      const response = await api.get(`/declarations/${signature}/verify`);
+      setVerificationResult(response.data);
       setError('');
     } catch (err) {
       setError('验证失败');

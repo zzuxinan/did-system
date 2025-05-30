@@ -1,9 +1,15 @@
 import { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
+import { API_ENDPOINTS } from '../config/api';
 
 interface AuthState {
   token: string | null;
-  user: any | null;
+  user: {
+    id: number;
+    email: string;
+    is_wallet_bound: boolean;
+    wallet_address: string | null;
+  } | null;
   walletAddress: string | null;
 }
 
@@ -13,6 +19,62 @@ export function useAuth() {
     user: null,
     walletAddress: null
   });
+
+  // 注册
+  const register = async (email: string, password: string) => {
+    try {
+      const response = await fetch(API_ENDPOINTS.register, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email, password })
+      });
+
+      const data = await response.json();
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      setAuthState({
+        token: data.token,
+        user: data.user,
+        walletAddress: null
+      });
+
+      return data;
+    } catch (err: any) {
+      throw new Error(err.message);
+    }
+  };
+
+  // 登录
+  const login = async (email: string, password: string) => {
+    try {
+      const response = await fetch(API_ENDPOINTS.login, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email, password })
+      });
+
+      const data = await response.json();
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      setAuthState({
+        token: data.token,
+        user: data.user,
+        walletAddress: data.user.wallet_address
+      });
+
+      return data;
+    } catch (err: any) {
+      throw new Error(err.message);
+    }
+  };
 
   // 连接钱包
   const connectWallet = async () => {
@@ -31,6 +93,53 @@ export function useAuth() {
       }));
 
       return accounts[0];
+    } catch (err: any) {
+      throw new Error(err.message);
+    }
+  };
+
+  // 绑定钱包
+  const bindWallet = async () => {
+    try {
+      if (!authState.token) {
+        throw new Error('请先登录');
+      }
+
+      if (!authState.walletAddress) {
+        throw new Error('请先连接钱包');
+      }
+
+      if (authState.user?.is_wallet_bound) {
+        throw new Error('已绑定钱包');
+      }
+
+      const message = `绑定钱包地址: ${authState.walletAddress}`;
+      const signature = await signMessage(message);
+
+      const response = await fetch(API_ENDPOINTS.updateWallet, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authState.token}`
+        },
+        body: JSON.stringify({
+          wallet_address: authState.walletAddress,
+          signature,
+          message
+        })
+      });
+
+      const data = await response.json();
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      setAuthState(prev => ({
+        ...prev,
+        user: data.user
+      }));
+
+      return data;
     } catch (err: any) {
       throw new Error(err.message);
     }
@@ -60,10 +169,18 @@ export function useAuth() {
         throw new Error('请先登录并连接钱包');
       }
 
+      if (!authState.user?.is_wallet_bound) {
+        throw new Error('请先绑定钱包');
+      }
+
+      if (authState.walletAddress.toLowerCase() !== authState.user.wallet_address?.toLowerCase()) {
+        throw new Error('请使用绑定的钱包地址');
+      }
+
       const message = `请求访问 ${dataType} 数据`;
       const signature = await signMessage(message);
 
-      const response = await fetch(`http://localhost:5050/api/authorized-data/${dataType}`, {
+      const response = await fetch(API_ENDPOINTS.authorizedData(dataType), {
         headers: {
           'Authorization': `Bearer ${authState.token}`,
           'X-Wallet-Signature': signature,
@@ -90,7 +207,15 @@ export function useAuth() {
         throw new Error('请先登录');
       }
 
-      const response = await fetch('http://localhost:5050/api/authorize', {
+      if (!authState.user?.is_wallet_bound) {
+        throw new Error('请先绑定钱包');
+      }
+
+      if (authState.walletAddress?.toLowerCase() !== authState.user.wallet_address?.toLowerCase()) {
+        throw new Error('请使用绑定的钱包地址');
+      }
+
+      const response = await fetch(API_ENDPOINTS.authorizations, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -121,7 +246,15 @@ export function useAuth() {
         throw new Error('请先登录');
       }
 
-      const response = await fetch('http://localhost:5050/api/authorizations', {
+      if (!authState.user?.is_wallet_bound) {
+        throw new Error('请先绑定钱包');
+      }
+
+      if (authState.walletAddress?.toLowerCase() !== authState.user.wallet_address?.toLowerCase()) {
+        throw new Error('请使用绑定的钱包地址');
+      }
+
+      const response = await fetch(API_ENDPOINTS.authorizations, {
         headers: {
           'Authorization': `Bearer ${authState.token}`
         }
@@ -145,8 +278,16 @@ export function useAuth() {
         throw new Error('请先登录');
       }
 
-      const response = await fetch(`http://localhost:5050/api/authorizations/${authId}`, {
-        method: 'DELETE',
+      if (!authState.user?.is_wallet_bound) {
+        throw new Error('请先绑定钱包');
+      }
+
+      if (authState.walletAddress?.toLowerCase() !== authState.user.wallet_address?.toLowerCase()) {
+        throw new Error('请使用绑定的钱包地址');
+      }
+
+      const response = await fetch(API_ENDPOINTS.revokeAuthorization(authId), {
+        method: 'POST',
         headers: {
           'Authorization': `Bearer ${authState.token}`
         }
@@ -204,7 +345,10 @@ export function useAuth() {
 
   return {
     ...authState,
+    register,
+    login,
     connectWallet,
+    bindWallet,
     signMessage,
     getAuthorizedData,
     authorizeData,

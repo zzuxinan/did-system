@@ -12,7 +12,7 @@ import qrcode
 import io
 import base64
 
-auth_bp = Blueprint('auth', __name__)
+auth_bp = Blueprint('auth', __name__, url_prefix='/api/v1/auth')
 
 data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'instance', 'data')
 os.makedirs(data_dir, exist_ok=True)
@@ -59,13 +59,13 @@ def log_user_action(user_id, action, status, details=None):
     db.session.add(log)
     db.session.commit()
 
-@auth_bp.route('/api/register', methods=['POST'])
+@auth_bp.route('/register', methods=['POST'])
 def register():
     try:
         data = request.get_json()
         
         # 验证必要字段
-        required_fields = ['name', 'email', 'password', 'wallet_address']
+        required_fields = ['email', 'password', 'name', 'wallet_address']
         for field in required_fields:
             if field not in data:
                 return jsonify({
@@ -78,12 +78,6 @@ def register():
                 'error': '邮箱格式不正确'
             }), 400
 
-        # 验证钱包地址格式
-        if not data['wallet_address'].startswith('0x') or len(data['wallet_address']) != 42:
-            return jsonify({
-                'error': '钱包地址格式不正确'
-            }), 400
-
         # 检查邮箱是否已存在
         if User.query.filter_by(email=data['email']).first():
             return jsonify({
@@ -93,7 +87,7 @@ def register():
         # 检查钱包地址是否已存在
         if User.query.filter_by(wallet_address=data['wallet_address']).first():
             return jsonify({
-                'error': '该钱包地址已被注册'
+                'error': '该钱包地址已被绑定'
             }), 400
 
         # 创建新用户
@@ -101,7 +95,8 @@ def register():
             name=data['name'],
             email=data['email'],
             password_hash=generate_password_hash(data['password'], method='pbkdf2:sha256'),
-            wallet_address=data['wallet_address']
+            wallet_address=data['wallet_address'],
+            is_active=True
         )
 
         db.session.add(new_user)
@@ -128,7 +123,7 @@ def register():
             'error': f'注册失败: {str(e)}'
         }), 500
 
-@auth_bp.route('/api/login', methods=['POST'])
+@auth_bp.route('/login', methods=['POST'])
 def login():
     try:
         data = request.get_json()
@@ -165,7 +160,7 @@ def login():
     except Exception as e:
         return jsonify({'error': f'登录失败: {str(e)}'}), 500
 
-@auth_bp.route('/api/profile', methods=['GET'])
+@auth_bp.route('/profile', methods=['GET'])
 @token_required
 def get_profile(current_user):
     return jsonify({
@@ -173,7 +168,7 @@ def get_profile(current_user):
         'user': current_user.to_dict()
     }), 200
 
-@auth_bp.route('/api/profile', methods=['PUT'])
+@auth_bp.route('/profile', methods=['PUT'])
 @token_required
 def update_profile(current_user):
     try:
@@ -199,7 +194,7 @@ def update_profile(current_user):
         db.session.rollback()
         return jsonify({'error': f'更新用户信息失败: {str(e)}'}), 500
 
-@auth_bp.route('/api/profile/password', methods=['PUT'])
+@auth_bp.route('/profile/password', methods=['PUT'])
 @token_required
 def change_password(current_user):
     try:
@@ -229,7 +224,7 @@ def change_password(current_user):
         db.session.rollback()
         return jsonify({'error': f'修改密码失败: {str(e)}'}), 500
 
-@auth_bp.route('/api/profile/wallet', methods=['PUT'])
+@auth_bp.route('/profile/wallet', methods=['PUT'])
 @token_required
 def update_wallet(current_user):
     try:
@@ -264,7 +259,7 @@ def update_wallet(current_user):
         db.session.rollback()
         return jsonify({'error': f'更新钱包地址失败: {str(e)}'}), 500
 
-@auth_bp.route('/api/profile/logs', methods=['GET'])
+@auth_bp.route('/profile/logs', methods=['GET'])
 @token_required
 def get_user_logs(current_user):
     try:
@@ -351,7 +346,7 @@ def list_files(current_user):
     files = DataFile.query.filter_by(user_id=current_user.id).order_by(DataFile.created_at.desc()).all()
     return jsonify({'files': [f.to_dict() for f in files]}), 200
 
-@auth_bp.route('/api/authorizations', methods=['POST'])
+@auth_bp.route('/authorizations', methods=['POST'])
 @token_required
 def create_authorization(current_user):
     try:
@@ -408,7 +403,7 @@ def create_authorization(current_user):
         db.session.rollback()
         return jsonify({'error': f'创建授权失败: {str(e)}'}), 500
 
-@auth_bp.route('/api/authorizations', methods=['GET'])
+@auth_bp.route('/authorizations', methods=['GET'])
 @token_required
 def get_authorizations(current_user):
     try:
@@ -423,7 +418,7 @@ def get_authorizations(current_user):
     except Exception as e:
         return jsonify({'error': f'获取授权记录失败: {str(e)}'}), 500
 
-@auth_bp.route('/api/authorizations/<int:auth_id>/revoke', methods=['POST'])
+@auth_bp.route('/authorizations/<int:auth_id>/revoke', methods=['POST'])
 @token_required
 def revoke_authorization(current_user, auth_id):
     try:
@@ -462,7 +457,7 @@ def revoke_authorization(current_user, auth_id):
         db.session.rollback()
         return jsonify({'error': f'撤销授权失败: {str(e)}'}), 500
 
-@auth_bp.route('/api/authorizations/<int:auth_id>/timeline', methods=['GET'])
+@auth_bp.route('/authorizations/<int:auth_id>/timeline', methods=['GET'])
 @token_required
 def get_authorization_timeline(current_user, auth_id):
     try:
@@ -484,8 +479,7 @@ def get_authorization_timeline(current_user, auth_id):
     except Exception as e:
         return jsonify({'error': f'获取授权时间线失败: {str(e)}'}), 500
 
-# 声明签名
-@auth_bp.route('/api/declarations', methods=['POST'])
+@auth_bp.route('/declarations', methods=['POST'])
 @token_required
 def create_declaration(current_user):
     try:
@@ -532,7 +526,7 @@ def create_declaration(current_user):
         db.session.rollback()
         return jsonify({'error': f'创建声明失败: {str(e)}'}), 500
 
-@auth_bp.route('/api/declarations/<signature>/verify', methods=['GET'])
+@auth_bp.route('/declarations/<signature>/verify', methods=['GET'])
 def verify_declaration(signature):
     try:
         declaration = Declaration.query.filter_by(signature=signature).first()
@@ -560,7 +554,7 @@ def verify_declaration(signature):
     except Exception as e:
         return jsonify({'error': f'验证声明失败: {str(e)}'}), 500
 
-@auth_bp.route('/api/declarations/<signature>/qr', methods=['GET'])
+@auth_bp.route('/declarations/<signature>/qr', methods=['GET'])
 def get_declaration_qr(signature):
     try:
         declaration = Declaration.query.filter_by(signature=signature).first()
@@ -581,7 +575,7 @@ def get_declaration_qr(signature):
     except Exception as e:
         return jsonify({'error': f'获取二维码失败: {str(e)}'}), 500
 
-@auth_bp.route('/api/user-data/<data_type>', methods=['GET'])
+@auth_bp.route('/user-data/<data_type>', methods=['GET'])
 @token_required
 def get_user_data(current_user, data_type):
     try:
@@ -604,7 +598,7 @@ def get_user_data(current_user, data_type):
     except Exception as e:
         return jsonify({'error': f'获取数据失败: {str(e)}'}), 500
 
-@auth_bp.route('/api/user-data/<data_type>', methods=['PUT'])
+@auth_bp.route('/user-data/<data_type>', methods=['PUT'])
 @token_required
 def update_user_data(current_user, data_type):
     try:
@@ -649,7 +643,7 @@ def update_user_data(current_user, data_type):
         db.session.rollback()
         return jsonify({'error': f'更新数据失败: {str(e)}'}), 500
 
-@auth_bp.route('/api/authorized-data/<data_type>', methods=['GET'])
+@auth_bp.route('/authorized-data/<data_type>', methods=['GET'])
 @token_required
 def get_authorized_data(current_user, data_type):
     try:
@@ -691,7 +685,7 @@ def get_authorized_data(current_user, data_type):
     except Exception as e:
         return jsonify({'error': f'获取授权数据失败: {str(e)}'}), 500
 
-@auth_bp.route('/api/health', methods=['GET'])
+@auth_bp.route('/health', methods=['GET'])
 def health_check():
     return jsonify({
         'status': 'ok',

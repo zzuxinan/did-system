@@ -13,6 +13,8 @@ contract DID is Ownable {
         string email;           // 用户邮箱
         bool isActive;          // 用户状态
         uint256 createdAt;      // 创建时间
+        bool isRegistered;
+        uint256 registrationTime;
     }
 
     // 授权信息结构
@@ -30,6 +32,7 @@ contract DID is Ownable {
     event AuthorizationCreated(uint256 indexed authId, address indexed owner, address indexed authorized, string dataType);
     event AuthorizationRevoked(uint256 indexed authId);
     event AuthorizationExpired(uint256 indexed authId);
+    event UserUpdated(address indexed userAddress, string email, uint256 timestamp);
 
     // 状态变量
     mapping(address => User) public users;                      // 钱包地址 => 用户信息
@@ -52,7 +55,9 @@ contract DID is Ownable {
         users[msg.sender] = User({
             email: _email,
             isActive: true,
-            createdAt: block.timestamp
+            createdAt: block.timestamp,
+            isRegistered: true,
+            registrationTime: block.timestamp
         });
 
         emailToWallet[_email] = msg.sender;
@@ -69,7 +74,9 @@ contract DID is Ownable {
         users[msg.sender] = User({
             email: _email,
             isActive: true,
-            createdAt: block.timestamp
+            createdAt: block.timestamp,
+            isRegistered: true,
+            registrationTime: block.timestamp
         });
 
         emailToWallet[_email] = msg.sender;
@@ -174,5 +181,31 @@ contract DID is Ownable {
     // 获取钱包地址
     function getWalletAddress(string memory _email) external view returns (address) {
         return emailToWallet[_email];
+    }
+
+    function updateUserEmail(string memory _newEmail) public {
+        require(users[msg.sender].isRegistered, "User not registered");
+        require(emailToWallet[_newEmail] == address(0), "Email already registered");
+        
+        string memory oldEmail = users[msg.sender].email;
+        users[msg.sender].email = _newEmail;
+        
+        delete emailToWallet[oldEmail];
+        emailToWallet[_newEmail] = msg.sender;
+        
+        emit UserUpdated(msg.sender, _newEmail, block.timestamp);
+    }
+
+    function isUserRegistered(address _userAddress) public view returns (bool) {
+        return users[_userAddress].isRegistered;
+    }
+
+    function getUserInfo(address _userAddress) public view returns (
+        string memory email,
+        bool isRegistered,
+        uint256 registrationTime
+    ) {
+        User memory user = users[_userAddress];
+        return (user.email, user.isRegistered, user.registrationTime);
     }
 } 

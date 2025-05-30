@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/context/auth-context';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import Link from "next/link";
 import { ethers } from 'ethers';
+import api from '@/lib/api/config';
 
 interface AuthorizedData {
   identity?: {
@@ -59,19 +60,16 @@ export default function AuthorizedDataPage() {
 
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:5050/api/authorized-data/${dataType}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      const response = await api.get(`/authorized-data/${dataType}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       
-      const data = await response.json();
-      if (data.error) {
-        setError(data.error);
-      } else if (data.data?.data_content) {
+      if (response.data.error) {
+        setError(response.data.error);
+      } else if (response.data.data_content) {
         setAuthorizedData(prev => ({
           ...prev,
-          [dataType]: data.data.data_content
+          [dataType]: response.data.data_content
         }));
       }
     } catch (err) {

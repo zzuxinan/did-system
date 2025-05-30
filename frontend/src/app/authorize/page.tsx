@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth } from '@/lib/context/auth-context';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import Link from "next/link";
+import api from '@/lib/api/config';
 
 interface Authorization {
   id: number;
@@ -51,15 +52,10 @@ export default function AuthorizePage() {
   // 获取授权列表
   const fetchAuthorizations = async () => {
     try {
-      const response = await fetch('http://localhost:5050/api/authorizations', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      const response = await api.get('/authorizations', {
+        headers: { 'Authorization': `Bearer ${token}` }
       });
-      const data = await response.json();
-      if (data.authorizations) {
-        setAuthorizations(data.authorizations);
-      }
+      setAuthorizations(response.data.authorizations);
     } catch (err) {
       setError('获取授权列表失败');
     }
@@ -68,15 +64,10 @@ export default function AuthorizePage() {
   // 获取授权时间线
   const fetchTimeline = async (authorizationId: number) => {
     try {
-      const response = await fetch(`http://localhost:5050/api/authorizations/${authorizationId}/timeline`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      const response = await api.get(`/authorizations/${authorizationId}/timeline`, {
+        headers: { 'Authorization': `Bearer ${token}` }
       });
-      const data = await response.json();
-      if (data.logs) {
-        setTimeline(data.logs);
-      }
+      setTimeline(response.data.timeline);
     } catch (err) {
       setError('获取时间线失败');
     }
@@ -86,28 +77,17 @@ export default function AuthorizePage() {
   const handleAddAuthorization = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:5050/api/authorizations', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          data_type: dataType,
-          authorized_address: authorizedAddress,
-          duration_minutes: durationMinutes
-        })
+      const response = await api.post('/authorizations', {
+        data_type: dataType,
+        authorized_address: authorizedAddress,
+        duration_minutes: durationMinutes
+      }, {
+        headers: { 'Authorization': `Bearer ${token}` }
       });
-
-      const data = await response.json();
-      if (data.message) {
-        setSuccess('授权创建成功');
-        setAuthorizedAddress('');
-        fetchAuthorizations();
-        setTimeout(() => setSuccess(''), 3000);
-      } else {
-        setError(data.error || '创建授权失败');
-      }
+      setSuccess(response.data.message);
+      setAuthorizedAddress('');
+      fetchAuthorizations();
+      setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError('创建授权失败');
     } finally {
@@ -118,21 +98,12 @@ export default function AuthorizePage() {
   // 撤销授权
   const handleRevokeAuthorization = async (authId: number) => {
     try {
-      const response = await fetch(`http://localhost:5050/api/authorizations/${authId}/revoke`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      const response = await api.post(`/authorizations/${authId}/revoke`, {}, {
+        headers: { 'Authorization': `Bearer ${token}` }
       });
-
-      const data = await response.json();
-      if (data.message) {
-        setSuccess('授权撤销成功');
-        fetchAuthorizations();
-        setTimeout(() => setSuccess(''), 3000);
-      } else {
-        setError(data.error || '撤销授权失败');
-      }
+      setSuccess(response.data.message);
+      fetchAuthorizations();
+      setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError('撤销授权失败');
     }

@@ -8,6 +8,7 @@ import Link from "next/link";
 import { useAuth } from '@/lib/context/auth-context';
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from 'react';
+import api from '@/lib/api/config';
 
 function formatToBeijingTime(isoString: string) {
   let fixed = isoString.endsWith('Z') ? isoString : isoString + 'Z';
@@ -28,16 +29,16 @@ export default function DashboardPage() {
       setLoading(true);
       setError('');
       try {
-        const res = await fetch('http://localhost:5050/api/profile/logs', {
+        const response = await api.get('/profile/logs', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        const data = await res.json();
-        if (data.logs) {
-          setLogs(data.logs);
+        if (response.data.logs) {
+          setLogs(response.data.logs);
         } else {
-          setError(data.error || '获取操作记录失败');
+          setError(response.data.error || '获取操作记录失败');
         }
       } catch (e) {
+        console.error('获取操作记录失败:', e);
         setError('获取操作记录失败');
       } finally {
         setLoading(false);

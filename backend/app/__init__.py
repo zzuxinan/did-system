@@ -22,8 +22,8 @@ def create_app():
     
     # 配置 CORS
     CORS(app, 
-         resources={r"/api/*": {
-             "origins": ["http://localhost:3000", "http://localhost:3001"],
+         resources={r"/api/v1/auth/*": {
+             "origins": "*",  # 允许所有来源
              "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
              "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
              "supports_credentials": True,

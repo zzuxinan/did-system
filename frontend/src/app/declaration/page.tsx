@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from '@/lib/context/auth-context';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import Image from 'next/image';
+import { API_ENDPOINTS } from '../../config/api';
 
 interface Declaration {
   id: number;
@@ -32,7 +33,7 @@ export default function DeclarationPage() {
 
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:5050/api/declarations', {
+      const response = await fetch(API_ENDPOINTS.declarations, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

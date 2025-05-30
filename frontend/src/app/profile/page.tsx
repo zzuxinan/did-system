@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from '@/lib/context/auth-context';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import Link from 'next/link';
+import api from '@/lib/api/config';
 
 interface UserData {
   identity: {
@@ -53,18 +54,10 @@ export default function ProfilePage() {
   // 获取用户数据
   const fetchUserData = async (dataType: keyof UserData) => {
     try {
-      const response = await fetch(`http://localhost:5050/api/user-data/${dataType}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      const response = await api.get(`/user-data/${dataType}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
       });
-      const data = await response.json();
-      if (data.data?.data_content) {
-        setUserData(prev => ({
-          ...prev,
-          [dataType]: data.data.data_content
-        }));
-      }
+      setUserData(prev => ({ ...prev, [dataType]: response.data.data_content }));
     } catch (err) {
       setError('获取数据失败');
     }
@@ -74,22 +67,14 @@ export default function ProfilePage() {
   const updateUserData = async (dataType: keyof UserData) => {
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:5050/api/user-data/${dataType}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          data_content: userData[dataType]
-        })
+      const response = await api.put(`/user-data/${dataType}`, {
+        data_content: userData[dataType]
+      }, {
+        headers: { 'Authorization': `Bearer ${token}` }
       });
-
-      const data = await response.json();
-      if (data.message) {
-        setSuccess('更新成功');
-        setTimeout(() => setSuccess(''), 3000);
-      }
+      setUserData(prev => ({ ...prev, [dataType]: response.data.data_content }));
+      setSuccess('更新成功');
+      setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError('更新失败');
     } finally {
